@@ -1,0 +1,208 @@
+---
+title: "MODULE 1 - STATISTICAL SEGMENTATION"
+author: "Melisa Cardenas Pijo"
+date: "19/4/2020"
+output:
+  md_document:
+    variant: markdown_github
+---
+### --- COMPUTING RECENCY, FREQUENCY, MONETARY VALUE ---------
+### Loading the dataset
+
+```{r}
+data = read.delim(file = 'purchases.txt', header = FALSE, sep = '\t', dec = '.')
+```
+
+#### Display the data before transformation
+```{r}
+head(data)
+str(data)
+```
+
+### Transforming the dataset
+#### Add headers and interpret the last column as a date, extract year of purchase
+
+```{r}
+colnames(data) = c('customer_id', 'purchase_amount', 'date_of_purchase')
+data$date_of_purchase = as.Date(data$date_of_purchase, "%Y-%m-%d")
+data$days_since       = as.numeric(difftime(time1 = "2016-01-01",
+                                            time2 = data$date_of_purchase,
+                                            units = "days"))
+```
+Function difftime calculates a difference of two date/time.
+
+### Exploring the transformed dataset
+#### Dataset size
+```{r}
+dim(data)
+```
+
+##### Display the data after transformation
+```{r}
+head(data)
+summary(data)
+```
+
+### Compute key marketing indicators using SQL language
+#### Let's compute key marketing indicators: Recency, Frequency, and Monetary Value (average purchase amount):
+```{r}
+
+library(sqldf)
+
+# Compute recency, frequency, and average purchase amount
+customers = sqldf("SELECT customer_id,
+                          MIN(days_since) AS 'recency',
+                          COUNT(*) AS 'frequency',
+                          AVG(purchase_amount) AS 'amount'
+                   FROM data GROUP BY 1")
+head(customers)
+```
+
+### Computing key marketing indicators with RSTUDIO
+#### Let's compute key marketing indicators: Recency, Frequency, and Monetary Value (average purchase amount):
+```{r}
+library(dplyr)
+
+customer_id_groups <- group_by(data, customer_id) # first groups data by customer_id
+
+customers_1 <- summarise(customer_id_groups,# then summarizes and creates new variables 
+                       recency = min(days_since),     # number of days since last purchase
+                       frequency = n(),                # number of purchases
+                       amount = mean(purchase_amount))  # average purchase amount (monetary value)
+
+head(customers_1)
+```
+
+### Explore the data
+```{r}
+head(customers)
+summary(customers)
+hist(customers$recency)
+hist(customers$frequency)
+hist(customers$amount)
+hist(customers$amount, breaks = 100)
+```
+
+#### Doing more data exploration
+```{r}
+library(ggplot2)
+
+ggplot(data=customers, aes(recency)) + geom_histogram(color = I('black'), fill= I('blue3'))
+```
+```{r}
+ggplot(data=customers, aes(frequency)) + geom_histogram(color = I('black'), fill= I('orange'))
+```
+```{r}
+ggplot(data=customers, aes(amount)) + geom_histogram(binwidth = 10, color = I('black'), fill= I('deepskyblue')) +
+   scale_x_continuous(limits = c(0, 500),
+                     breaks = seq(0, 500, 20))
+```
+The frequency and monetary value distribution are skewed. It requires data transformation (log).
+
+###--- PREPARING AND TRANSFORMING DATA ----------------------
+
+#### Copying customer data into new data frame
+
+```{r}
+new_data = customers
+```
+
+#### # Remove customer id as a variable, store it as row names
+And storing it as row names:
+
+```{r}
+head(new_data)
+row.names(new_data) = new_data$customer_id
+new_data$customer_id = NULL
+head(new_data)
+
+```
+
+#### Take the log-transform of the amount, and plot
+
+```{r}
+library(ggplot2)
+new_data$amount = log(new_data$amount)
+hist(new_data$amount)
+ 
+
+```
+#### Standardize variables
+
+```{r}
+new_data = scale(new_data)
+head(new_data)
+```
+
+### --- RUNNING A HIERARCHICAL SEGMENTATION ------------------
+
+#### Compute distance metrics on standardized data
+#### This will likely generate an error on most machines
+#### d = dist(new_data)
+
+#### Take a 10% sample
+
+```{r}
+sample = seq(1, 18417, by = 10)
+head(sample)
+customers_sample = customers[sample, ]
+new_data_sample  = new_data[sample, ]
+```
+
+#### Compute distance metrics on standardized data
+
+```{r}
+d = dist(new_data_sample)
+```
+
+#### Perform hierarchical clustering on distance metrics
+```{r}
+c = hclust(d, method="ward.D2")
+
+```
+
+#### Plot de dendogram
+```{r}
+plot(c)
+```
+
+#### Cut at 9 segments
+
+```{r}
+members = cutree(c, k = 9)
+head(members)
+```
+
+#### Show 30 first customers, frequency table
+```{r}
+members[1:30]
+table(members)
+```
+
+#### Show profile of each segment
+```{r}
+aggregate(customers_sample[, 2:4], by = list(members), mean)
+```
+
+Groups by segment number the variables (recency, frequency and monetary value) of the non-normalized customer sample and shows the mean value of each variable for each segment
+
+### Analysis
+
+The above table summarizes the diversity of profile existing between the 18,417 customers of the database. For example:
+
+*Segment 4 has an average recency of 162 days, an average of 2.4 purchases made in the past and an average purchase amount of $41.10
+
+*Segment #6 spends much more in the store whereas segment #2 spends much less.
+
+*Segment #3 made a huge number of purchase in the past whereas segment #8 made only one, and a long time ago.
+
+
+
+
+
+
+
+
+
+
+

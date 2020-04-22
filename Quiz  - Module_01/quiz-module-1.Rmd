@@ -1,0 +1,312 @@
+---
+title: "Quiz-module-1"
+author: "Melisa Cardenas Pijo"
+date: "21/4/2020"
+output: 
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Instructions before starting the quiz 1
+
+To validate Module 1 and correctly answer the questions will require that you perform the following exercise first: take the code in the file named module1.R, and modify it such that
+
+(1) the segmentation variable "frequency" is replaced by its log (before it is scaled), and 
+(2) you select a 5-segment solution instead of a 9-segment solution.
+
+## You'll be asked to answer these questions :
+
+- What is the size of the largest segment?
+
+- What is the average purchase amount of the segment which contains, on average, the customers who have made their last purchase the most recently?
+
+- Of the five following criteria to determine the best number of segments, which one is the least relevant?
+
+- Does customer #260 belongs to the same segment than customer #5920?
+
+- Looking at the average profile of segment 1, would you say that members of this segment are typically...(you'll have to choose the right proposition).
+
+### --- COMPUTING RECENCY, FREQUENCY, MONETARY VALUE ---------
+### Loading the dataset
+
+
+```{r}
+data = read.delim(file = 'purchases.txt', header = FALSE, sep = '\t', dec = '.')
+```
+
+#### Display the data before transformation
+```{r}
+head(data)
+str(data)
+```
+
+### Transforming the dataset
+#### Add headers and interpret the last column as a date, extract year of purchase
+
+```{r}
+colnames(data) = c('customer_id', 'purchase_amount', 'date_of_purchase')
+data$date_of_purchase = as.Date(data$date_of_purchase, "%Y-%m-%d")
+data$days_since       = as.numeric(difftime(time1 = "2016-01-01",
+                                            time2 = data$date_of_purchase,
+                                            units = "days"))
+```
+Function difftime calculates a difference of two date/time.
+
+### Exploring the transformed dataset
+#### Dataset size
+```{r}
+dim(data)
+```
+
+##### Display the data after transformation
+```{r}
+head(data)
+summary(data)
+```
+
+### Computing key marketing indicators with RSTUDIO
+#### Let's compute key marketing indicators: Recency, Frequency, and Monetary Value (average purchase amount):
+```{r}
+library(dplyr)
+
+customer_id_groups <- group_by(data, customer_id) # first groups data by customer_id
+
+customers_1 <- summarise(customer_id_groups,# then summarizes and creates new variables 
+                       recency = min(days_since),     # number of days since last purchase
+                       frequency = n(),                # number of purchases
+                       amount = mean(purchase_amount))  # average purchase amount (monetary value)
+
+head(customers_1)
+```
+
+
+80	343.2083	7	71.42857	
+
+El cliente que tiene el id = 80 su compra más reciente ha sido hace 343 días, con 7 números de compras
+del 01/01/2005 al 01/01/2016 con un monto promedio de compras de S/. 71.42.
+
+### Explore the data
+```{r}
+head(customers_1)
+summary(customers_1)
+hist(customers_1$recency)
+hist(customers_1$frequency)
+hist(customers_1$amount)
+hist(customers_1$amount, breaks = 100)
+```
+
+
+#### Doing more data exploration
+```{r}
+library(ggplot2)
+
+ggplot(data=customers_1, aes(recency)) + geom_histogram(color = I('black'), fill= I('blue3'))
+```
+
+```{r}
+ggplot(data=customers_1, aes(frequency)) + geom_histogram(color = I('black'), fill= I('orange'))
+```
+
+```{r}
+ggplot(data=customers_1, aes(amount)) + geom_histogram(binwidth = 10, color = I('black'), fill= I('deepskyblue')) +
+   scale_x_continuous(limits = c(0, 500),
+                     breaks = seq(0, 500, 20))
+```
+###--- PREPARING AND TRANSFORMING DATA ----------------------
+
+#### Copying customer data into new data frame
+
+```{r}
+new_data = customers_1
+head(new_data)
+```
+
+#### Remove customer id as a variable, store it as row names
+
+And storing it as row names:
+
+```{r}
+head(new_data)
+row.names(new_data) = new_data$customer_id
+new_data$customer_id = NULL
+head(new_data)
+
+```
+#### Take the log-transform of the amount, and plot
+
+```{r}
+library(ggplot2)
+new_data$amount = log(new_data$amount)
+hist(new_data$amount)
+ 
+```
+
+#### Take the log-transform of the frecuency, and plot
+
+```{r}
+library(ggplot2)
+new_data$frequency = log(new_data$frequency)
+hist(new_data$frequency)
+
+```
+#### Standardize variables
+
+```{r}
+new_data = scale(new_data)
+head(new_data)
+
+```
+Data is now ready to be segmented.
+
+### --- RUNNING A HIERARCHICAL SEGMENTATION ------------------
+
+#### Compute distance metrics on standardized data
+#### This will likely generate an error on most machines
+#### d = dist(new_data)
+
+#### Take a 10% sample
+
+```{r}
+sample = seq(1, 18417, by = 10)
+head(sample)
+customers_sample = customers_1[sample, ]
+new_data_sample  = new_data[sample, ]
+```
+
+
+#### Compute distance metrics on standardized data
+
+```{r}
+d = dist(new_data_sample)
+```
+
+#### Perform hierarchical clustering on distance metrics
+```{r}
+c = hclust(d, method="ward.D2")
+
+```
+
+#### Plot de dendogram
+```{r}
+plot(c)
+```
+
+#### Cut at 5 segments
+
+```{r}
+members = cutree(c, k = 5)
+head(members)
+#Muestra el segmento más grande
+table(members)
+```
+
+#### Show 30 first customers, frequency table
+```{r}
+members[1:30]
+table(members)
+```
+
+#### Show profile of each segment
+```{r}
+aggregate(customers_sample[, 2:4], by = list(members), mean)
+```
+
+Groups by segment number the variables (recency, frequency and monetary value) of the non-normalized customer sample and shows the mean value of each variable for each segment.
+
+
+### Analysis
+
+The above table summarizes the diversity of profile existing between the 18,417 customers of the database. For example:
+
+*Segment 2 has an average recency of 305 days, an average of 5.3 purchases made in the past and an average purchase amount of $38.3.
+
+*Segment #5 spends much more in the store whereas segment #3 spends much less.
+
+
+## Quiz module 1 - 20% of final grade
+###PUNTOS TOTALES DE 5
+
+#### 1.Pregunta 1
+#### What is the size of the largest segment?
+```{r}
+table(members)
+```
+The largest segment is segment 4, which has 555 customers.
+
+#### 2.Pregunta 2
+#### What is the average purchase amount of the segment which contains, on average, the customers who #### have made their last purchase the most recently?
+```{r}
+aggregate(customers_sample[, 2:4], by = list(members), mean)
+```
+
+The segment 2 has customers who made their last purchase 305 days ago on average. For this segment, the average purchase amount is $38.2.
+
+
+#### 3.Pregunta 3
+#### Of the five following criteria to determine the best number of segments, which one is the least relevant?
+
+
+- How informative the segment solution is to managers
+
+
+#### - The number of segmentation variables
+
+
+- The number of customers
+
+
+- The fact that each segment is clearly different from the other clusters
+
+
+- The statistical validity of the segment solution, as determined by the dendogram
+
+
+#### 4.Pregunta 4
+#### Does customer #260 belongs to the same segment than customer #5920?
+
+#### Opción 1: lo convertimos a matriz
+```{r}
+members_matrix <- as.matrix(members)
+members_matrix[c('260'), ]
+```
+
+
+```{r}
+members_matrix[c('5920'), ]
+```
+#### Opción 2: lo convertimos a dataframe
+```{r}
+members_dataframe <- data.frame(members)
+members_dataframe
+members_dataframe[620, ]
+members_dataframe['5920', ]
+```
+
+No, customer #260 and customer #5920 belong to different segments.
+
+#### 5.Pregunta 5
+#### Looking at the average profile of segment 1, would you say that members of this segment are #### typically...
+
+```{r}
+aggregate(customers_sample[, 2:4], by = list(members), mean)
+```
+
+- Recurring customers with the best recency of all segments
+
+
+- Recently acquired customers who have made few purchases so far
+
+
+- Customers who do not spend much money on average, but are very loyal
+
+
+- Extremely profitable customers
+
+
+#### -Customers with poor prospects in terms of loyalty and profitability, due to the few purchases they have made so far.
+
+The member of segment #1 has an average recency of 2757 days (7.5 years) with an average frequency of about 1.1 and an average purchase amount of $35. It seems that the member of this segment were one-time shopper in this store and that it's unlikely that they will return. They are customers with poor prospects in terms of loyalty and profitability, due to the few purchases they have made so far.
